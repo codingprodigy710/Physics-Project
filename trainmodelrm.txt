@@ -1,0 +1,59 @@
+import pandas as pd
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+import joblib  # For saving the scalers
+from tensorflow import keras
+from tensorflow.keras import layers
+
+# Load the dataset
+df = pd.read_csv("Data.csv")
+
+# Check if there are any non-numeric values in your data
+non_numeric_cols = df.columns[df.applymap(lambda x: isinstance(x, str)).any()]
+print("Non-numeric columns:", non_numeric_cols)
+
+# Option 1: Convert non-numeric values to NaN and then drop those rows
+df_cleaned = df.apply(pd.to_numeric, errors='coerce')  # Convert all values to numeric, invalid values become NaN
+df_cleaned = df_cleaned.dropna()  # Drop rows with NaN values (those that had invalid entries)
+
+# Now the dataset is cleaned, let's separate features and targets
+X = df_cleaned[["Ro"]].values  # 'Ro' is the mass density
+y = df_cleaned.drop(columns=["Ro"]).values  # Exclude 'Ro' from target variables
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Normalize the data
+scaler_X = StandardScaler()
+scaler_y = StandardScaler()
+
+X_train_scaled = scaler_X.fit_transform(X_train)
+X_test_scaled = scaler_X.transform(X_test)
+
+y_train_scaled = scaler_y.fit_transform(y_train)
+y_test_scaled = scaler_y.transform(y_test)
+
+# Save the scalers for later use (in prediction script)
+joblib.dump(scaler_X, 'scaler_X.pkl')
+joblib.dump(scaler_y, 'scaler_y.pkl')
+
+# Build the neural network model
+model = keras.Sequential()
+
+# Add layers to the model
+model.add(layers.Dense(64, input_dim=1, activation='relu'))  # Input layer + first hidden layer
+model.add(layers.Dense(128, activation='relu'))  # Second hidden layer
+model.add(layers.Dense(64, activation='relu'))  # Third hidden layer
+model.add(layers.Dense(y_train_scaled.shape[1]))  # Output layer (no activation for regression)
+
+# Compile the model
+model.compile(optimizer='adam', loss='mean_squared_error', metrics=['mae'])
+
+# Train the model
+history = model.fit(X_train_scaled, y_train_scaled, epochs=200, batch_size=16, validation_data=(X_test_scaled, y_test_scaled))
+
+# Save the trained model
+model.save("mlp_mass_density_model_v2.h5")
+
+print("Model and scalers saved successfully!")
